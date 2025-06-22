@@ -1,0 +1,34 @@
+# Xcode
+#
+# gitignore contributors: remember to keep this file platform-agnostic
+# gitignore contributors: remember to update the documentation page
+# -> https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+## User-specific
+*.xcuserdatad
+*.xcworkspace
+*.ds_store
+
+## Build generated
+build/
+DerivedData/
+
+## Various
+*.moved-aside
+*~
+.DS_Store
+
+## Swift Package Manager
+.swiftpm/
+Package.resolved
+/Packages
+
+# Cocoapods
+/Pods
+
+# Carthage
+/Carthage
+Carthage.resolved
+
+# Secrets
+GoogleService-Info.plist 
