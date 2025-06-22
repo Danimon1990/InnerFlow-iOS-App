@@ -17,6 +17,10 @@ class DataManager: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
+    private func dailyLogsCollection(for userId: String) -> CollectionReference {
+        db.collection("users").document(userId).collection("daily_logs")
+    }
+    
     // MARK: - Daily Logs
     
     func fetchDailyLogs(for userId: String) async {
@@ -24,31 +28,44 @@ class DataManager: ObservableObject {
         errorMessage = nil
         
         do {
-            let snapshot = try await db.collection("users")
-                .document(userId)
-                .collection("daily_logs")
+            let snapshot = try await dailyLogsCollection(for: userId)
                 .order(by: "date", descending: true)
                 .limit(to: 30)
                 .getDocuments()
             
-            dailyLogs = snapshot.documents.compactMap { document in
+            self.dailyLogs = snapshot.documents.compactMap { document -> DailyLog? in
                 let data = document.data()
                 var log = DailyLog(
                     date: (data["date"] as? Timestamp)?.dateValue() ?? Date(),
-                    mood: data["mood"] as? String ?? "",
-                    notes: data["notes"] as? String ?? "",
-                    moodScore: data["moodScore"] as? Int ?? 5,
-                    activities: data["activities"] as? [String] ?? []
+                    morningMood: data["morningMood"] as? Int ?? 5,
+                    generalMood: data["generalMood"] as? Int ?? 5,
+                    morningEnergy: data["morningEnergy"] as? Int ?? 5,
+                    generalEnergy: data["generalEnergy"] as? Int ?? 5,
+                    timeToBed: (data["timeToBed"] as? Timestamp)?.dateValue() ?? Date(),
+                    timeWokeUp: (data["timeWokeUp"] as? Timestamp)?.dateValue() ?? Date(),
+                    stressLevel: data["stressLevel"] as? Int ?? 3,
+                    targetSymptom: TargetSymptomStatus(rawValue: data["targetSymptom"] as? String ?? "same") ?? .same,
+                    foodBreakfast: data["foodBreakfast"] as? String ?? "",
+                    foodSnack1: data["foodSnack1"] as? String ?? "",
+                    foodLunch: data["foodLunch"] as? String ?? "",
+                    foodSnack2: data["foodSnack2"] as? String ?? "",
+                    foodDinner: data["foodDinner"] as? String ?? "",
+                    foodDrinks: data["foodDrinks"] as? String ?? "",
+                    medicines: data["medicines"] as? String ?? "",
+                    digestiveFlow: data["digestiveFlow"] as? Int ?? 5,
+                    digestiveFlowNotes: data["digestiveFlowNotes"] as? String ?? "",
+                    moonCycleNotes: data["moonCycleNotes"] as? String ?? "",
+                    painLevel: data["painLevel"] as? Int ?? 0,
+                    painNotes: data["painNotes"] as? String ?? "",
+                    notes: data["notes"] as? String ?? ""
                 )
                 log.id = document.documentID
                 return log
             }
-            
-            isLoading = false
         } catch {
-            isLoading = false
             errorMessage = error.localizedDescription
         }
+        isLoading = false
     }
     
     func saveDailyLog(_ log: DailyLog, for userId: String) async {
@@ -56,56 +73,52 @@ class DataManager: ObservableObject {
         errorMessage = nil
         
         do {
-            let documentRef = db.collection("users")
-                .document(userId)
-                .collection("daily_logs")
-                .document(log.date.formatted(date: .numeric, time: .omitted))
+            var logToSave = log
+            let documentRef: DocumentReference
+            
+            if let id = log.id {
+                documentRef = dailyLogsCollection(for: userId).document(id)
+                logToSave.updatedAt = Date()
+            } else {
+                documentRef = dailyLogsCollection(for: userId).document()
+                logToSave.id = documentRef.documentID
+            }
             
             let data: [String: Any] = [
-                "date": Timestamp(date: log.date),
-                "mood": log.mood,
-                "notes": log.notes,
-                "moodScore": log.moodScore,
-                "activities": log.activities,
-                "createdAt": Timestamp(date: log.createdAt),
-                "updatedAt": Timestamp(date: log.updatedAt)
+                "id": logToSave.id!,
+                "date": Timestamp(date: logToSave.date),
+                "morningMood": logToSave.morningMood,
+                "generalMood": logToSave.generalMood,
+                "morningEnergy": logToSave.morningEnergy,
+                "generalEnergy": logToSave.generalEnergy,
+                "timeToBed": Timestamp(date: logToSave.timeToBed),
+                "timeWokeUp": Timestamp(date: logToSave.timeWokeUp),
+                "stressLevel": logToSave.stressLevel,
+                "targetSymptom": logToSave.targetSymptom.rawValue,
+                "foodBreakfast": logToSave.foodBreakfast,
+                "foodSnack1": logToSave.foodSnack1,
+                "foodLunch": logToSave.foodLunch,
+                "foodSnack2": logToSave.foodSnack2,
+                "foodDinner": logToSave.foodDinner,
+                "foodDrinks": logToSave.foodDrinks,
+                "medicines": logToSave.medicines,
+                "digestiveFlow": logToSave.digestiveFlow,
+                "digestiveFlowNotes": logToSave.digestiveFlowNotes,
+                "moonCycleNotes": logToSave.moonCycleNotes,
+                "painLevel": logToSave.painLevel,
+                "painNotes": logToSave.painNotes,
+                "notes": logToSave.notes,
+                "createdAt": Timestamp(date: logToSave.createdAt),
+                "updatedAt": Timestamp(date: logToSave.updatedAt)
             ]
             
-            try await documentRef.setData(data)
+            try await documentRef.setData(data, merge: true)
             
-            // Refresh the logs
             await fetchDailyLogs(for: userId)
-            
-            isLoading = false
-        } catch {
-            isLoading = false
-            errorMessage = error.localizedDescription
-        }
-    }
-    
-    func getDailyLog(for date: Date, userId: String) async -> DailyLog? {
-        do {
-            let documentRef = db.collection("users")
-                .document(userId)
-                .collection("daily_logs")
-                .document(date.formatted(date: .numeric, time: .omitted))
-            
-            let document = try await documentRef.getDocument()
-            guard let data = document.data() else { return nil }
-            
-            var log = DailyLog(
-                date: (data["date"] as? Timestamp)?.dateValue() ?? Date(),
-                mood: data["mood"] as? String ?? "",
-                notes: data["notes"] as? String ?? "",
-                moodScore: data["moodScore"] as? Int ?? 5,
-                activities: data["activities"] as? [String] ?? []
-            )
-            log.id = document.documentID
-            return log
         } catch {
             errorMessage = error.localizedDescription
-            return nil
         }
+        isLoading = false
     }
     
     // MARK: - User Profile
@@ -117,6 +130,7 @@ class DataManager: ObservableObject {
         do {
             let document = try await db.collection("users").document(userId).getDocument()
             guard let data = document.data() else {
+                errorMessage = "User profile data is empty."
                 isLoading = false
                 return
             }
@@ -126,21 +140,36 @@ class DataManager: ObservableObject {
                 dailyReminder: notificationData["dailyReminder"] as? Bool ?? true,
                 weeklyReport: notificationData["weeklyReport"] as? Bool ?? true
             )
+
+            let trackingData = data["trackingSettings"] as? [String: Any] ?? [:]
+            let trackingSettings = TrackingSettings(
+                trackMood: trackingData["trackMood"] as? Bool ?? true,
+                trackEnergy: trackingData["trackEnergy"] as? Bool ?? true,
+                trackSleep: trackingData["trackSleep"] as? Bool ?? true,
+                trackStress: trackingData["trackStress"] as? Bool ?? true,
+                trackSymptoms: trackingData["trackSymptoms"] as? Bool ?? true,
+                trackFood: trackingData["trackFood"] as? Bool ?? true,
+                trackMedicines: trackingData["trackMedicines"] as? Bool ?? true,
+                trackDigestion: trackingData["trackDigestion"] as? Bool ?? true,
+                trackMoonCycle: trackingData["trackMoonCycle"] as? Bool ?? true,
+                trackPain: trackingData["trackPain"] as? Bool ?? true,
+                trackNotes: trackingData["trackNotes"] as? Bool ?? true
+            )
             
             var profile = UserProfile(
                 name: data["name"] as? String ?? "",
                 email: data["email"] as? String ?? "",
                 createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
-                notificationSettings: notificationSettings
+                notificationSettings: notificationSettings,
+                trackingSettings: trackingSettings
             )
             profile.id = document.documentID
-            userProfile = profile
+            self.userProfile = profile
             
-            isLoading = false
         } catch {
-            isLoading = false
-            errorMessage = error.localizedDescription
+            errorMessage = "Could not load user profile: \(error.localizedDescription)"
         }
+        isLoading = false
     }
     
     func updateUserProfile(_ profile: UserProfile, for userId: String) async {
@@ -148,6 +177,20 @@ class DataManager: ObservableObject {
         errorMessage = nil
         
         do {
+            let trackingSettingsData: [String: Any] = [
+                "trackMood": profile.trackingSettings.trackMood,
+                "trackEnergy": profile.trackingSettings.trackEnergy,
+                "trackSleep": profile.trackingSettings.trackSleep,
+                "trackStress": profile.trackingSettings.trackStress,
+                "trackSymptoms": profile.trackingSettings.trackSymptoms,
+                "trackFood": profile.trackingSettings.trackFood,
+                "trackMedicines": profile.trackingSettings.trackMedicines,
+                "trackDigestion": profile.trackingSettings.trackDigestion,
+                "trackMoonCycle": profile.trackingSettings.trackMoonCycle,
+                "trackPain": profile.trackingSettings.trackPain,
+                "trackNotes": profile.trackingSettings.trackNotes
+            ]
+            
             let data: [String: Any] = [
                 "name": profile.name,
                 "email": profile.email,
@@ -155,55 +198,27 @@ class DataManager: ObservableObject {
                 "notificationSettings": [
                     "dailyReminder": profile.notificationSettings.dailyReminder,
                     "weeklyReport": profile.notificationSettings.weeklyReport
-                ]
+                ],
+                "trackingSettings": trackingSettingsData
             ]
             
-            try await db.collection("users").document(userId).setData(data)
-            userProfile = profile
-            isLoading = false
+            try await db.collection("users").document(userId).setData(data, merge: true)
+            self.userProfile = profile
         } catch {
-            isLoading = false
             errorMessage = error.localizedDescription
         }
+        isLoading = false
     }
     
-    // MARK: - Analytics
+    // MARK: - Analytics (Placeholder)
     
     func getMoodTrends(for userId: String, days: Int = 7) async -> [DailyLog] {
-        do {
-            let calendar = Calendar.current
-            let startDate = calendar.date(byAdding: .day, value: -days, to: Date()) ?? Date()
-            
-            let snapshot = try await db.collection("users")
-                .document(userId)
-                .collection("daily_logs")
-                .whereField("date", isGreaterThanOrEqualTo: Timestamp(date: startDate))
-                .order(by: "date", descending: false)
-                .getDocuments()
-            
-            return snapshot.documents.compactMap { document in
-                let data = document.data()
-                var log = DailyLog(
-                    date: (data["date"] as? Timestamp)?.dateValue() ?? Date(),
-                    mood: data["mood"] as? String ?? "",
-                    notes: data["notes"] as? String ?? "",
-                    moodScore: data["moodScore"] as? Int ?? 5,
-                    activities: data["activities"] as? [String] ?? []
-                )
-                log.id = document.documentID
-                return log
-            }
-        } catch {
-            errorMessage = error.localizedDescription
-            return []
-        }
+        // TODO: Re-implement with new data structure
+        return []
     }
     
     func getAverageMoodScore(for userId: String, days: Int = 7) async -> Double {
-        let logs = await getMoodTrends(for: userId, days: days)
-        guard !logs.isEmpty else { return 0 }
-        
-        let totalScore = logs.reduce(0) { $0 + $1.moodScore }
-        return Double(totalScore) / Double(logs.count)
+        // TODO: Re-implement with new data structure
+        return 0.0
     }
 } 

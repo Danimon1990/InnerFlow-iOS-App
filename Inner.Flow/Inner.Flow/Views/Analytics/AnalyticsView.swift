@@ -6,15 +6,15 @@
 //
 
 import SwiftUI
+import Charts
 
 struct AnalyticsView: View {
     @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var selectedTimeframe: Timeframe = .week
-    @State private var moodTrends: [DailyLog] = []
-    @State private var isLoading = false
     
-    enum Timeframe: String, CaseIterable {
+    enum Timeframe: String, CaseIterable, Identifiable {
+        var id: String { rawValue }
         case week = "Week"
         case month = "Month"
         case threeMonths = "3 Months"
@@ -28,72 +28,53 @@ struct AnalyticsView: View {
         }
     }
     
+    private var filteredLogs: [DailyLog] {
+        let calendar = Calendar.current
+        let endDate = Date()
+        let startDate = calendar.date(byAdding: .day, value: -selectedTimeframe.days, to: endDate) ?? endDate
+        
+        return dataManager.dailyLogs.filter { log in
+            return log.date >= startDate && log.date <= endDate
+        }
+    }
+    
     var body: some View {
         NavigationView {
             ZStack {
-                AppTheme.background
-                    .ignoresSafeArea()
+                AppTheme.background.ignoresSafeArea()
                 
                 ScrollView {
                     VStack(spacing: AppTheme.spacingLarge) {
-                        // Timeframe Selector
                         Picker("Timeframe", selection: $selectedTimeframe) {
-                            ForEach(Timeframe.allCases, id: \.self) { timeframe in
+                            ForEach(Timeframe.allCases) { timeframe in
                                 Text(timeframe.rawValue).tag(timeframe)
                             }
                         }
                         .pickerStyle(SegmentedPickerStyle())
                         .padding(.horizontal, AppTheme.spacingLarge)
                         .padding(.top, AppTheme.spacingLarge)
-                        .onChange(of: selectedTimeframe) { _, _ in
-                            loadMoodTrends()
-                        }
                         
-                        if isLoading {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                                .padding(AppTheme.spacingExtraLarge)
-                        } else if moodTrends.isEmpty {
+                        if filteredLogs.isEmpty {
                             EmptyAnalyticsView()
                         } else {
-                            // Statistics
-                            StatisticsView(logs: moodTrends)
-                                .padding(.horizontal, AppTheme.spacingLarge)
-                            
-                            // Mood Distribution
-                            MoodDistributionView(logs: moodTrends)
-                                .padding(.horizontal, AppTheme.spacingLarge)
-                            
-                            // Activity Analysis
-                            ActivityAnalysisView(logs: moodTrends)
-                                .padding(.horizontal, AppTheme.spacingLarge)
+                            TrendChartView(logs: filteredLogs)
+                            StatisticsGridView(logs: filteredLogs)
                         }
                     }
                     .padding(.bottom, AppTheme.spacingExtraLarge)
                 }
             }
             .navigationTitle("Analytics")
-            .navigationBarTitleDisplayMode(.large)
             .refreshable {
-                loadMoodTrends()
+                if let userId = authManager.user?.uid {
+                    await dataManager.fetchDailyLogs(for: userId)
+                }
             }
-        }
-        .onAppear {
-            loadMoodTrends()
-        }
-    }
-    
-    private func loadMoodTrends() {
-        guard let userId = authManager.user?.uid else { return }
-        
-        isLoading = true
-        
-        Task {
-            moodTrends = await dataManager.getMoodTrends(for: userId, days: selectedTimeframe.days)
-            isLoading = false
         }
     }
 }
+
+// MARK: - Subviews
 
 struct EmptyAnalyticsView: View {
     var body: some View {
@@ -102,83 +83,113 @@ struct EmptyAnalyticsView: View {
                 .font(.system(size: 80))
                 .foregroundColor(AppTheme.primary)
             
-            VStack(spacing: AppTheme.spacing) {
-                Text("No Data Available")
-                    .font(AppTheme.Typography.title2)
-                    .foregroundColor(AppTheme.text)
-                
-                Text("Start logging your daily moods to see analytics and trends")
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.textSecondary)
-                    .multilineTextAlignment(.center)
-            }
+            Text("Not Enough Data")
+                .font(AppTheme.Typography.title2)
+            
+            Text("Log your daily progress for a few days to see your trends and analytics.")
+                .font(AppTheme.Typography.body)
+                .foregroundColor(AppTheme.textSecondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
         }
         .padding(AppTheme.spacingExtraLarge)
     }
 }
 
-struct StatisticsView: View {
+struct TrendChartView: View {
+    let logs: [DailyLog]
+
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("Trends")
+                .font(.headline)
+                .padding(.horizontal, AppTheme.spacingLarge)
+
+            Chart {
+                ForEach(logs) { log in
+                    LineMark(
+                        x: .value("Date", log.date, unit: .day),
+                        y: .value("Mood", log.generalMood),
+                        series: .value("Metric", "Mood")
+                    )
+                    .foregroundStyle(by: .value("Metric", "Mood"))
+
+                    LineMark(
+                        x: .value("Date", log.date, unit: .day),
+                        y: .value("Energy", log.generalEnergy),
+                        series: .value("Metric", "Energy")
+                    )
+                    .foregroundStyle(by: .value("Metric", "Energy"))
+                    
+                    LineMark(
+                        x: .value("Date", log.date, unit: .day),
+                        y: .value("Stress", log.stressLevel * 2), // Scale stress to 1-10
+                        series: .value("Metric", "Stress")
+                    )
+                    .foregroundStyle(by: .value("Metric", "Stress"))
+                }
+            }
+            .chartForegroundStyleScale([
+                "Mood": Color.blue,
+                "Energy": Color.green,
+                "Stress": Color.orange
+            ])
+            .chartYAxis {
+                AxisMarks(position: .leading, values: .automatic(desiredCount: 5))
+            }
+            .chartXAxis {
+                AxisMarks(values: .automatic(desiredCount: 7)) {
+                    AxisGridLine()
+                    AxisTick()
+                    AxisValueLabel(format: .dateTime.month().day(), centered: true)
+                }
+            }
+            .frame(height: 200)
+            .padding(AppTheme.spacing)
+            .appCard()
+            .padding(.horizontal, AppTheme.spacingLarge)
+        }
+    }
+}
+
+
+struct StatisticsGridView: View {
     let logs: [DailyLog]
     
     private var averageMood: Double {
-        guard !logs.isEmpty else { return 0 }
-        let totalScore = logs.reduce(0) { $0 + $1.moodScore }
-        return Double(totalScore) / Double(logs.count)
+        let total = logs.reduce(0) { $0 + $1.generalMood }
+        return Double(total) / Double(logs.count)
     }
     
-    private var bestMood: Int {
-        logs.map { $0.moodScore }.max() ?? 0
+    private var averageEnergy: Double {
+        let total = logs.reduce(0) { $0 + $1.generalEnergy }
+        return Double(total) / Double(logs.count)
     }
-    
-    private var worstMood: Int {
-        logs.map { $0.moodScore }.min() ?? 0
+
+    private var averageStress: Double {
+        let total = logs.reduce(0) { $0 + $1.stressLevel }
+        return Double(total) / Double(logs.count)
     }
-    
-    private var totalEntries: Int {
-        logs.count
+
+    private var averageSleep: Double {
+        let total = logs.reduce(0) { $0 + $1.timeWokeUp.timeIntervalSince($1.timeToBed) }
+        return (total / Double(logs.count)) / 3600 // In hours
     }
-    
+
     var body: some View {
-        VStack(spacing: AppTheme.spacing) {
-            Text("Statistics")
-                .font(AppTheme.Typography.headline)
-                .foregroundColor(AppTheme.text)
-            
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: AppTheme.spacing) {
-                StatisticCard(
-                    title: "Average Mood",
-                    value: String(format: "%.1f", averageMood),
-                    icon: "heart.fill",
-                    color: AppTheme.primary
-                )
-                
-                StatisticCard(
-                    title: "Total Entries",
-                    value: "\(totalEntries)",
-                    icon: "book.fill",
-                    color: AppTheme.secondary
-                )
-                
-                StatisticCard(
-                    title: "Best Day",
-                    value: "\(bestMood)/10",
-                    icon: "star.fill",
-                    color: AppTheme.success
-                )
-                
-                StatisticCard(
-                    title: "Lowest Day",
-                    value: "\(worstMood)/10",
-                    icon: "arrow.down.circle.fill",
-                    color: AppTheme.warning
-                )
+        VStack(alignment: .leading) {
+            Text("Averages")
+                .font(.headline)
+                .padding(.horizontal, AppTheme.spacingLarge)
+
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppTheme.spacing) {
+                StatisticCard(title: "Mood", value: String(format: "%.1f", averageMood), icon: "face.smiling", color: .blue)
+                StatisticCard(title: "Energy", value: String(format: "%.1f", averageEnergy), icon: "bolt.fill", color: .green)
+                StatisticCard(title: "Stress", value: String(format: "%.1f", averageStress), icon: "flame.fill", color: .orange)
+                StatisticCard(title: "Sleep", value: String(format: "%.1f", averageSleep) + " hr", icon: "bed.double.fill", color: .purple)
             }
+            .padding(.horizontal, AppTheme.spacingLarge)
         }
-        .padding(AppTheme.spacingLarge)
-        .appCard()
     }
 }
 
@@ -199,109 +210,11 @@ struct StatisticCard: View {
                 .foregroundColor(AppTheme.text)
             
             Text(title)
-                .font(AppTheme.Typography.caption)
-                .foregroundColor(AppTheme.textSecondary)
-                .multilineTextAlignment(.center)
+                .font(AppTheme.Typography.captionBold)
+                .foregroundColor(AppTheme.text)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 100)
         .padding(AppTheme.spacing)
-        .background(Color.white)
-        .cornerRadius(AppTheme.cornerRadius)
-    }
-}
-
-struct MoodDistributionView: View {
-    let logs: [DailyLog]
-    
-    private var moodCounts: [String: Int] {
-        Dictionary(grouping: logs, by: { $0.mood })
-            .mapValues { $0.count }
-    }
-    
-    var body: some View {
-        VStack(spacing: AppTheme.spacing) {
-            Text("Mood Distribution")
-                .font(AppTheme.Typography.headline)
-                .foregroundColor(AppTheme.text)
-            
-            if moodCounts.isEmpty {
-                Text("No mood data available")
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.textSecondary)
-            } else {
-                VStack(spacing: AppTheme.spacingSmall) {
-                    ForEach(Array(moodCounts.sorted(by: { $0.value > $1.value })), id: \.key) { mood, count in
-                        HStack {
-                            Text(mood)
-                                .font(.system(size: 24))
-                            
-                            Text("\(count) times")
-                                .font(AppTheme.Typography.body)
-                                .foregroundColor(AppTheme.text)
-                            
-                            Spacer()
-                            
-                            Text("\(Int(Double(count) / Double(logs.count) * 100))%")
-                                .font(AppTheme.Typography.captionBold)
-                                .foregroundColor(AppTheme.primary)
-                        }
-                        .padding(AppTheme.spacingSmall)
-                        .background(AppTheme.tertiary)
-                        .cornerRadius(AppTheme.cornerRadiusSmall)
-                    }
-                }
-            }
-        }
-        .padding(AppTheme.spacingLarge)
-        .appCard()
-    }
-}
-
-struct ActivityAnalysisView: View {
-    let logs: [DailyLog]
-    
-    private var activityCounts: [String: Int] {
-        var counts: [String: Int] = [:]
-        for log in logs {
-            for activity in log.activities {
-                counts[activity, default: 0] += 1
-            }
-        }
-        return counts
-    }
-    
-    var body: some View {
-        VStack(spacing: AppTheme.spacing) {
-            Text("Most Common Activities")
-                .font(AppTheme.Typography.headline)
-                .foregroundColor(AppTheme.text)
-            
-            if activityCounts.isEmpty {
-                Text("No activity data available")
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.textSecondary)
-            } else {
-                VStack(spacing: AppTheme.spacingSmall) {
-                    ForEach(Array(activityCounts.sorted(by: { $0.value > $1.value }).prefix(5)), id: \.key) { activity, count in
-                        HStack {
-                            Text(activity)
-                                .font(AppTheme.Typography.body)
-                                .foregroundColor(AppTheme.text)
-                            
-                            Spacer()
-                            
-                            Text("\(count) times")
-                                .font(AppTheme.Typography.captionBold)
-                                .foregroundColor(AppTheme.primary)
-                        }
-                        .padding(AppTheme.spacingSmall)
-                        .background(AppTheme.tertiary)
-                        .cornerRadius(AppTheme.cornerRadiusSmall)
-                    }
-                }
-            }
-        }
-        .padding(AppTheme.spacingLarge)
         .appCard()
     }
 }

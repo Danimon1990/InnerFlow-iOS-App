@@ -12,181 +12,148 @@ struct DailyLogFormView: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedMood: MoodEmoji = .okay
+    // State for all the new DailyLog fields
+    @State private var date = Date()
+    @State private var morningMood: Double = 5
+    @State private var generalMood: Double = 5
+    @State private var morningEnergy: Double = 5
+    @State private var generalEnergy: Double = 5
+    @State private var timeToBed = Date()
+    @State private var timeWokeUp = Date()
+    @State private var stressLevel: Double = 3
+    @State private var targetSymptom: TargetSymptomStatus = .same
+    @State private var foodBreakfast = ""
+    @State private var foodSnack1 = ""
+    @State private var foodLunch = ""
+    @State private var foodSnack2 = ""
+    @State private var foodDinner = ""
+    @State private var foodDrinks = ""
+    @State private var medicines = ""
+    @State private var digestiveFlow: Double = 5
+    @State private var digestiveFlowNotes = ""
+    @State private var moonCycleNotes = ""
+    @State private var painLevel: Double = 0
+    @State private var painNotes = ""
     @State private var notes = ""
-    @State private var selectedActivities: Set<String> = []
-    @State private var customActivity = ""
-    @State private var showActivitySheet = false
+    
     @State private var isLoading = false
-    
-    private let availableActivities = [
-        "Exercise", "Reading", "Meditation", "Work", "Social", 
-        "Family", "Hobbies", "Rest", "Learning", "Creative"
-    ]
-    
+
+    // Use the settings from the authenticated user's profile
+    private var settings: TrackingSettings {
+        authManager.userProfile?.trackingSettings ?? TrackingSettings()
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
-                AppTheme.background
-                    .ignoresSafeArea()
+                AppTheme.background.ignoresSafeArea()
                 
-                ScrollView {
-                    VStack(spacing: AppTheme.spacingLarge) {
-                        // Date Header
-                        VStack(spacing: AppTheme.spacingSmall) {
-                            Text(Date().formatted(date: .complete, time: .omitted))
-                                .font(AppTheme.Typography.title3)
-                                .foregroundColor(AppTheme.text)
-                            
-                            Text("How are you feeling today?")
-                                .font(AppTheme.Typography.body)
-                                .foregroundColor(AppTheme.textSecondary)
+                Form {
+                    Section(header: Text("Date")) {
+                        DatePicker("Log Date", selection: $date, displayedComponents: .date)
+                    }
+
+                    if settings.trackMood {
+                        CollapsibleSection(title: "Mood") {
+                            RatingSlider(value: $morningMood, label: "Morning Mood")
+                            RatingSlider(value: $generalMood, label: "General Mood")
                         }
-                        .padding(.top, AppTheme.spacingLarge)
-                        
-                        // Mood Selection
-                        VStack(spacing: AppTheme.spacing) {
-                            Text("Select Your Mood")
-                                .font(AppTheme.Typography.headline)
-                                .foregroundColor(AppTheme.text)
-                            
-                            HStack(spacing: AppTheme.spacing) {
-                                ForEach(MoodEmoji.allCases, id: \.self) { mood in
-                                    Button(action: { selectedMood = mood }) {
-                                        VStack(spacing: AppTheme.spacingSmall) {
-                                            Text(mood.rawValue)
-                                                .font(.system(size: 40))
-                                                .opacity(selectedMood == mood ? 1.0 : 0.6)
-                                            
-                                            Text(mood.description)
-                                                .font(AppTheme.Typography.caption)
-                                                .foregroundColor(selectedMood == mood ? AppTheme.primary : AppTheme.textSecondary)
-                                        }
-                                        .padding(AppTheme.spacing)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                                                .fill(selectedMood == mood ? AppTheme.tertiary : Color.clear)
-                                        )
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
+                    }
+
+                    if settings.trackEnergy {
+                        CollapsibleSection(title: "Energy") {
+                            RatingSlider(value: $morningEnergy, label: "Morning Energy")
+                            RatingSlider(value: $generalEnergy, label: "General Energy")
+                        }
+                    }
+                    
+                    if settings.trackSleep {
+                        CollapsibleSection(title: "Sleep") {
+                            DatePicker("Time Went to Bed", selection: $timeToBed, displayedComponents: .hourAndMinute)
+                            DatePicker("Time Woke Up", selection: $timeWokeUp, displayedComponents: .hourAndMinute)
+                        }
+                    }
+
+                    if settings.trackStress {
+                        CollapsibleSection(title: "Stress Level") {
+                            RatingSlider(value: $stressLevel, label: "Stress", range: 1...5)
+                        }
+                    }
+                    
+                    if settings.trackSymptoms {
+                        CollapsibleSection(title: "Target Symptom") {
+                            Picker("Status", selection: $targetSymptom) {
+                                ForEach(TargetSymptomStatus.allCases, id: \.self) { status in
+                                    Text(status.rawValue).tag(status)
                                 }
                             }
+                            .pickerStyle(SegmentedPickerStyle())
                         }
-                        .padding(AppTheme.spacingLarge)
-                        .appCard()
-                        .padding(.horizontal, AppTheme.spacingLarge)
-                        
-                        // Notes Section
-                        VStack(spacing: AppTheme.spacing) {
-                            Text("Reflections & Notes")
-                                .font(AppTheme.Typography.headline)
-                                .foregroundColor(AppTheme.text)
-                            
+                    }
+
+                    if settings.trackFood {
+                        CollapsibleSection(title: "Food Intake") {
+                            TitledTextField(title: "Breakfast", text: $foodBreakfast)
+                            TitledTextField(title: "Snacks", text: $foodSnack1)
+                            TitledTextField(title: "Lunch", text: $foodLunch)
+                            TitledTextField(title: "Snacks", text: $foodSnack2)
+                            TitledTextField(title: "Dinner", text: $foodDinner)
+                            TitledTextField(title: "Drinks", text: $foodDrinks)
+                        }
+                    }
+
+                    if settings.trackMedicines {
+                        CollapsibleSection(title: "Medicines, Herbs & Supplements") {
+                            TitledTextField(title: "Details", text: $medicines, placeholder: "List items and dosages")
+                        }
+                    }
+                    
+                    if settings.trackDigestion {
+                        CollapsibleSection(title: "Digestive Flow") {
+                            RatingSlider(value: $digestiveFlow, label: "Rating")
+                            TitledTextField(title: "Details", text: $digestiveFlowNotes)
+                        }
+                    }
+
+                    if settings.trackMoonCycle {
+                        CollapsibleSection(title: "Moon Cycle") {
+                             TitledTextField(title: "Hormonal, Physical, or Menstrual Changes", text: $moonCycleNotes)
+                        }
+                    }
+                    
+                    if settings.trackPain {
+                        CollapsibleSection(title: "Pain") {
+                            RatingSlider(value: $painLevel, label: "Pain Level")
+                             TitledTextField(title: "Details", text: $painNotes)
+                        }
+                    }
+
+                    if settings.trackNotes {
+                        CollapsibleSection(title: "General Notes") {
                             TextEditor(text: $notes)
-                                .frame(minHeight: 120)
-                                .padding(AppTheme.spacing)
-                                .background(Color.white)
-                                .cornerRadius(AppTheme.cornerRadius)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                                        .stroke(AppTheme.secondary, lineWidth: 1)
-                                )
+                                .frame(minHeight: 150)
                         }
-                        .padding(AppTheme.spacingLarge)
-                        .appCard()
-                        .padding(.horizontal, AppTheme.spacingLarge)
-                        
-                        // Activities Section
-                        VStack(spacing: AppTheme.spacing) {
-                            HStack {
-                                Text("Activities")
-                                    .font(AppTheme.Typography.headline)
-                                    .foregroundColor(AppTheme.text)
-                                
-                                Spacer()
-                                
-                                Button("Add") {
-                                    showActivitySheet = true
-                                }
-                                .font(AppTheme.Typography.body)
-                                .foregroundColor(AppTheme.primary)
-                            }
-                            
-                            if selectedActivities.isEmpty {
-                                Text("No activities selected")
-                                    .font(AppTheme.Typography.body)
-                                    .foregroundColor(AppTheme.textSecondary)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            } else {
-                                LazyVGrid(columns: [
-                                    GridItem(.flexible()),
-                                    GridItem(.flexible())
-                                ], spacing: AppTheme.spacingSmall) {
-                                    ForEach(Array(selectedActivities), id: \.self) { activity in
-                                        HStack {
-                                            Text(activity)
-                                                .font(AppTheme.Typography.caption)
-                                                .foregroundColor(AppTheme.primary)
-                                            
-                                            Spacer()
-                                            
-                                            Button(action: {
-                                                selectedActivities.remove(activity)
-                                            }) {
-                                                Image(systemName: "xmark.circle.fill")
-                                                    .font(.system(size: 16))
-                                                    .foregroundColor(AppTheme.textSecondary)
-                                            }
-                                        }
-                                        .padding(AppTheme.spacingSmall)
-                                        .background(AppTheme.tertiary)
-                                        .cornerRadius(AppTheme.cornerRadiusSmall)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(AppTheme.spacingLarge)
-                        .appCard()
-                        .padding(.horizontal, AppTheme.spacingLarge)
-                        
-                        // Save Button
-                        Button(action: saveLog) {
-                            HStack {
-                                if isLoading {
-                                    ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                        .scaleEffect(0.8)
-                                } else {
-                                    Text("Save Daily Log")
-                                        .font(AppTheme.Typography.bodyBold)
-                                }
-                            }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                        }
-                        .appButton()
-                        .disabled(isLoading)
-                        .padding(.horizontal, AppTheme.spacingLarge)
-                        .padding(.bottom, AppTheme.spacingLarge)
                     }
                 }
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("New Daily Log")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Cancel") {
-                        dismiss()
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button(action: saveLog) {
+                        if isLoading {
+                            ProgressView()
+                        } else {
+                            Text("Save")
+                        }
                     }
-                    .foregroundColor(AppTheme.primary)
+                    .disabled(isLoading)
                 }
             }
-        }
-        .sheet(isPresented: $showActivitySheet) {
-            ActivitySelectionView(
-                selectedActivities: $selectedActivities,
-                availableActivities: availableActivities
-            )
         }
     }
     
@@ -196,10 +163,28 @@ struct DailyLogFormView: View {
         isLoading = true
         
         let log = DailyLog(
-            mood: selectedMood.rawValue,
-            notes: notes,
-            moodScore: selectedMood.score,
-            activities: Array(selectedActivities)
+            date: date,
+            morningMood: Int(morningMood),
+            generalMood: Int(generalMood),
+            morningEnergy: Int(morningEnergy),
+            generalEnergy: Int(generalEnergy),
+            timeToBed: timeToBed,
+            timeWokeUp: timeWokeUp,
+            stressLevel: Int(stressLevel),
+            targetSymptom: targetSymptom,
+            foodBreakfast: foodBreakfast,
+            foodSnack1: foodSnack1,
+            foodLunch: foodLunch,
+            foodSnack2: foodSnack2,
+            foodDinner: foodDinner,
+            foodDrinks: foodDrinks,
+            medicines: medicines,
+            digestiveFlow: Int(digestiveFlow),
+            digestiveFlowNotes: digestiveFlowNotes,
+            moonCycleNotes: moonCycleNotes,
+            painLevel: Int(painLevel),
+            painNotes: painNotes,
+            notes: notes
         )
         
         Task {
@@ -210,109 +195,72 @@ struct DailyLogFormView: View {
     }
 }
 
-struct ActivitySelectionView: View {
-    @Binding var selectedActivities: Set<String>
-    let availableActivities: [String]
-    @Environment(\.dismiss) private var dismiss
-    @State private var customActivity = ""
+
+// MARK: - Reusable Components
+
+struct CollapsibleSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
     
     var body: some View {
-        NavigationView {
-            ZStack {
-                AppTheme.background
-                    .ignoresSafeArea()
-                
-                VStack(spacing: AppTheme.spacingLarge) {
-                    // Custom Activity
-                    VStack(spacing: AppTheme.spacing) {
-                        Text("Add Custom Activity")
-                            .font(AppTheme.Typography.headline)
-                            .foregroundColor(AppTheme.text)
-                        
-                        HStack {
-                            TextField("Enter custom activity", text: $customActivity)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
-                            
-                            Button("Add") {
-                                if !customActivity.isEmpty {
-                                    selectedActivities.insert(customActivity)
-                                    customActivity = ""
-                                }
-                            }
-                            .appButton()
-                            .frame(width: 60)
-                            .disabled(customActivity.isEmpty)
-                        }
-                    }
-                    .padding(AppTheme.spacingLarge)
-                    .appCard()
-                    .padding(.horizontal, AppTheme.spacingLarge)
-                    
-                    // Available Activities
-                    VStack(spacing: AppTheme.spacing) {
-                        Text("Common Activities")
-                            .font(AppTheme.Typography.headline)
-                            .foregroundColor(AppTheme.text)
-                        
-                        LazyVGrid(columns: [
-                            GridItem(.flexible()),
-                            GridItem(.flexible())
-                        ], spacing: AppTheme.spacing) {
-                            ForEach(availableActivities, id: \.self) { activity in
-                                Button(action: {
-                                    if selectedActivities.contains(activity) {
-                                        selectedActivities.remove(activity)
-                                    } else {
-                                        selectedActivities.insert(activity)
-                                    }
-                                }) {
-                                    HStack {
-                                        Text(activity)
-                                            .font(AppTheme.Typography.body)
-                                            .foregroundColor(selectedActivities.contains(activity) ? .white : AppTheme.text)
-                                        
-                                        Spacer()
-                                        
-                                        if selectedActivities.contains(activity) {
-                                            Image(systemName: "checkmark")
-                                                .font(.system(size: 14, weight: .bold))
-                                                .foregroundColor(.white)
-                                        }
-                                    }
-                                    .padding(AppTheme.spacing)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                                            .fill(selectedActivities.contains(activity) ? AppTheme.primary : Color.clear)
-                                    )
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                                            .stroke(AppTheme.primary, lineWidth: 1)
-                                    )
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                            }
-                        }
-                    }
-                    .padding(AppTheme.spacingLarge)
-                    .appCard()
-                    .padding(.horizontal, AppTheme.spacingLarge)
-                    
-                    Spacer()
-                }
+        DisclosureGroup(title) {
+            VStack(alignment: .leading, spacing: AppTheme.spacing) {
+                content
             }
-            .navigationTitle("Select Activities")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Done") {
-                        dismiss()
-                    }
-                    .foregroundColor(AppTheme.primary)
-                }
-            }
+            .padding(.vertical, AppTheme.spacing)
         }
     }
 }
+
+struct RatingSlider: View {
+    @Binding var value: Double
+    let label: String
+    var range: ClosedRange<Double> = 1...10
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
+            Text(label)
+                .font(AppTheme.Typography.body)
+            Slider(value: $value, in: range, step: 1)
+            Text("Rating: \(Int(value))")
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.textSecondary)
+        }
+    }
+}
+
+struct TitledTextField: View {
+    let title: String
+    @Binding var text: String
+    var placeholder: String = ""
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
+            Text(title)
+                .font(AppTheme.Typography.body)
+            TextField(placeholder, text: $text)
+                 .textFieldStyle(RoundedBorderTextFieldStyle())
+        }
+    }
+}
+
+// TODO: This should be moved to the UserProfile model and populated from Firestore
+// DELETE THE STRUCT BELOW
+/*
+struct TrackingSettings {
+    var trackMood: Bool = true
+    var trackEnergy: Bool = true
+    var trackSleep: Bool = true
+    var trackStress: Bool = true
+    var trackSymptoms: Bool = true
+    var trackFood: Bool = true
+    var trackMedicines: Bool = true
+    var trackDigestion: Bool = true
+    var trackMoonCycle: Bool = true
+    var trackPain: Bool = true
+    var trackNotes: Bool = true
+}
+*/
 
 #Preview {
     DailyLogFormView()

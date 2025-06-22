@@ -86,51 +86,39 @@ struct DailyLogCard: View {
     var body: some View {
         Button(action: { showDetails = true }) {
             HStack(spacing: AppTheme.spacing) {
-                // Mood Emoji
-                Text(log.mood)
-                    .font(.system(size: 32))
-                
-                VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
-                    HStack {
-                        Text(log.date.formatted(date: .abbreviated, time: .omitted))
-                            .font(AppTheme.Typography.bodyBold)
-                            .foregroundColor(AppTheme.text)
-                        
-                        Spacer()
-                        
-                        Text("\(log.moodScore)/10")
-                            .font(AppTheme.Typography.captionBold)
-                            .foregroundColor(AppTheme.primary)
-                    }
-                    
-                    if !log.notes.isEmpty {
-                        Text(log.notes)
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.textSecondary)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                    }
-                    
-                    if !log.activities.isEmpty {
-                        HStack {
-                            ForEach(log.activities.prefix(3), id: \.self) { activity in
-                                Text(activity)
-                                    .font(AppTheme.Typography.caption)
-                                    .foregroundColor(AppTheme.primary)
-                                    .padding(.horizontal, AppTheme.spacingSmall)
-                                    .padding(.vertical, 4)
-                                    .background(AppTheme.tertiary)
-                                    .cornerRadius(AppTheme.cornerRadiusSmall)
-                            }
-                            
-                            if log.activities.count > 3 {
-                                Text("+\(log.activities.count - 3)")
-                                    .font(AppTheme.Typography.caption)
-                                    .foregroundColor(AppTheme.textSecondary)
-                            }
-                        }
-                    }
+                // Date
+                VStack {
+                    Text(log.date.formatted(.dateTime.month().day()))
+                        .font(AppTheme.Typography.bodyBold)
+                    Text(log.date.formatted(.dateTime.year()))
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.textSecondary)
                 }
+                .padding()
+                .background(AppTheme.tertiary.opacity(0.5))
+                .cornerRadius(AppTheme.cornerRadius)
+                
+                // Summary
+                VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
+                    Text("Daily Summary")
+                        .font(AppTheme.Typography.bodyBold)
+                        .foregroundColor(AppTheme.text)
+                    
+                    HStack {
+                        Label("Mood: \(log.generalMood)/10", systemImage: "face.smiling")
+                        Spacer()
+                        Label("Energy: \(log.generalEnergy)/10", systemImage: "bolt.fill")
+                    }
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(AppTheme.textSecondary)
+                    
+                    Label("Symptom: \(log.targetSymptom.rawValue)", systemImage: "staroflife.fill")
+                        .font(AppTheme.Typography.caption)
+                        .foregroundColor(AppTheme.textSecondary)
+
+                }
+                
+                Spacer()
                 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 14, weight: .semibold))

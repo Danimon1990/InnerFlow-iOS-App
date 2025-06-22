@@ -8,51 +8,74 @@
 import SwiftUI
 
 struct SettingsView: View {
-    @EnvironmentObject var dataManager: DataManager
     @EnvironmentObject var authManager: AuthenticationManager
-    @State private var showProfileEdit = false
+    @EnvironmentObject var dataManager: DataManager
     @State private var showSignOutAlert = false
     
+    // Create bindings that also save the data on change
+    private var notificationSettings: Binding<NotificationSettings> {
+        Binding(
+            get: { authManager.userProfile?.notificationSettings ?? NotificationSettings() },
+            set: { newSettings in
+                guard var profile = authManager.userProfile, let userId = authManager.user?.uid else { return }
+                profile.notificationSettings = newSettings
+                authManager.userProfile = profile // Update local state immediately
+                
+                Task {
+                    await dataManager.updateUserProfile(profile, for: userId)
+                }
+            }
+        )
+    }
+    
+    private var trackingSettings: Binding<TrackingSettings> {
+        Binding(
+            get: { authManager.userProfile?.trackingSettings ?? TrackingSettings() },
+            set: { newSettings in
+                guard var profile = authManager.userProfile, let userId = authManager.user?.uid else { return }
+                profile.trackingSettings = newSettings
+                authManager.userProfile = profile // Update local state immediately
+                
+                Task {
+                    await dataManager.updateUserProfile(profile, for: userId)
+                }
+            }
+        )
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
-                AppTheme.background
-                    .ignoresSafeArea()
+                AppTheme.background.ignoresSafeArea()
                 
-                ScrollView {
-                    VStack(spacing: AppTheme.spacingLarge) {
-                        // Profile Section
+                Form {
+                    Section(header: Text("Profile")) {
                         ProfileSection()
-                            .padding(.horizontal, AppTheme.spacingLarge)
-                        
-                        // App Settings
-                        AppSettingsSection()
-                            .padding(.horizontal, AppTheme.spacingLarge)
-                        
-                        // Data & Privacy
-                        DataPrivacySection()
-                            .padding(.horizontal, AppTheme.spacingLarge)
-                        
-                        // About
-                        AboutSection()
-                            .padding(.horizontal, AppTheme.spacingLarge)
-                        
-                        // Sign Out
-                        SignOutSection()
-                            .padding(.horizontal, AppTheme.spacingLarge)
-                        
-                        Spacer(minLength: AppTheme.spacingExtraLarge)
                     }
-                    .padding(.vertical, AppTheme.spacingLarge)
+                    
+                    Section(header: Text("Notifications")) {
+                        AppSettingsSection(settings: notificationSettings)
+                    }
+                    
+                    Section(header: Text("Tracking Preferences")) {
+                        TrackingSettingsSection(settings: trackingSettings)
+                    }
+
+                    Section(header: Text("Data & Privacy")) {
+                        DataPrivacySection()
+                    }
+
+                    Section(header: Text("About")) {
+                        AboutSection()
+                    }
+                    
+                    Section {
+                        SignOutSection(showSignOutAlert: $showSignOutAlert)
+                    }
                 }
+                .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
-            .navigationBarTitleDisplayMode(.large)
-            .sheet(isPresented: $showProfileEdit) {
-                ProfileEditView()
-                    .environmentObject(dataManager)
-                    .environmentObject(authManager)
-            }
             .alert("Sign Out", isPresented: $showSignOutAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Sign Out", role: .destructive) {
@@ -65,257 +88,113 @@ struct SettingsView: View {
     }
 }
 
+// MARK: - Sections
+
 struct ProfileSection: View {
     @EnvironmentObject var authManager: AuthenticationManager
     @State private var showProfileEdit = false
     
     var body: some View {
-        VStack(spacing: AppTheme.spacing) {
-            HStack {
-                Text("Profile")
-                    .font(AppTheme.Typography.headline)
-                    .foregroundColor(AppTheme.text)
-                
-                Spacer()
-                
-                Button("Edit") {
-                    showProfileEdit = true
-                }
-                .font(AppTheme.Typography.body)
-                .foregroundColor(AppTheme.primary)
-            }
-            
-            VStack(spacing: AppTheme.spacing) {
+        VStack {
+            if let profile = authManager.userProfile {
                 HStack {
                     Image(systemName: "person.circle.fill")
                         .font(.system(size: 50))
                         .foregroundColor(AppTheme.primary)
                     
                     VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
-                        Text(authManager.userProfile?.name ?? "User")
+                        Text(profile.name)
                             .font(AppTheme.Typography.bodyBold)
-                            .foregroundColor(AppTheme.text)
-                        
-                        Text(authManager.userProfile?.email ?? "")
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.textSecondary)
-                        
-                        Text("Member since \(authManager.userProfile?.createdAt.formatted(date: .abbreviated, time: .omitted) ?? "")")
+                        Text(profile.email)
                             .font(AppTheme.Typography.caption)
                             .foregroundColor(AppTheme.textSecondary)
                     }
-                    
                     Spacer()
+                    Button("Edit") { showProfileEdit = true }
                 }
+            } else {
+                Text("Loading Profile...")
             }
         }
-        .padding(AppTheme.spacingLarge)
-        .appCard()
         .sheet(isPresented: $showProfileEdit) {
-            ProfileEditView()
-                .environmentObject(authManager)
+            // Make sure ProfileEditView exists and is set up
+            // ProfileEditView().environmentObject(authManager)
         }
     }
 }
 
 struct AppSettingsSection: View {
-    @State private var dailyReminder = true
-    @State private var weeklyReport = true
-    @State private var darkMode = false
+    @Binding var settings: NotificationSettings
     
     var body: some View {
-        VStack(spacing: AppTheme.spacing) {
-            Text("App Settings")
-                .font(AppTheme.Typography.headline)
-                .foregroundColor(AppTheme.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            VStack(spacing: AppTheme.spacingSmall) {
-                SettingRow(
-                    icon: "bell.fill",
-                    title: "Daily Reminder",
-                    subtitle: "Get reminded to log your mood",
-                    isToggle: true,
-                    toggleValue: $dailyReminder
-                )
-                
-                SettingRow(
-                    icon: "chart.bar.fill",
-                    title: "Weekly Report",
-                    subtitle: "Receive weekly mood summary",
-                    isToggle: true,
-                    toggleValue: $weeklyReport
-                )
-                
-                SettingRow(
-                    icon: "moon.fill",
-                    title: "Dark Mode",
-                    subtitle: "Use dark theme",
-                    isToggle: true,
-                    toggleValue: $darkMode
-                )
-            }
-        }
-        .padding(AppTheme.spacingLarge)
-        .appCard()
+        Toggle("Daily Reminder", isOn: $settings.dailyReminder)
+        Toggle("Weekly Report", isOn: $settings.weeklyReport)
+    }
+}
+
+struct TrackingSettingsSection: View {
+    @Binding var settings: TrackingSettings
+    
+    var body: some View {
+        Toggle("Track Mood", isOn: $settings.trackMood)
+        Toggle("Track Energy", isOn: $settings.trackEnergy)
+        Toggle("Track Sleep", isOn: $settings.trackSleep)
+        Toggle("Track Stress", isOn: $settings.trackStress)
+        Toggle("Track Target Symptoms", isOn: $settings.trackSymptoms)
+        Toggle("Track Food", isOn: $settings.trackFood)
+        Toggle("Track Medicines", isOn: $settings.trackMedicines)
+        Toggle("Track Digestion", isOn: $settings.trackDigestion)
+        Toggle("Track Moon Cycle", isOn: $settings.trackMoonCycle)
+        Toggle("Track Pain", isOn: $settings.trackPain)
+        Toggle("Track Notes", isOn: $settings.trackNotes)
     }
 }
 
 struct DataPrivacySection: View {
     var body: some View {
-        VStack(spacing: AppTheme.spacing) {
-            Text("Data & Privacy")
-                .font(AppTheme.Typography.headline)
-                .foregroundColor(AppTheme.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            VStack(spacing: AppTheme.spacingSmall) {
-                SettingRow(
-                    icon: "lock.fill",
-                    title: "Privacy Policy",
-                    subtitle: "Read our privacy policy",
-                    isToggle: false
-                )
-                
-                SettingRow(
-                    icon: "doc.text.fill",
-                    title: "Terms of Service",
-                    subtitle: "Read our terms of service",
-                    isToggle: false
-                )
-                
-                SettingRow(
-                    icon: "trash.fill",
-                    title: "Delete Account",
-                    subtitle: "Permanently delete your account",
-                    isToggle: false
-                )
-            }
+        NavigationLink("Privacy Policy", destination: Text("Privacy Policy Page"))
+        NavigationLink("Terms of Service", destination: Text("Terms of Service Page"))
+        Button(action: {
+            // Handle account deletion
+        }) {
+            Text("Delete Account").foregroundColor(AppTheme.error)
         }
-        .padding(AppTheme.spacingLarge)
-        .appCard()
     }
 }
 
 struct AboutSection: View {
     var body: some View {
-        VStack(spacing: AppTheme.spacing) {
-            Text("About")
-                .font(AppTheme.Typography.headline)
-                .foregroundColor(AppTheme.text)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            
-            VStack(spacing: AppTheme.spacingSmall) {
-                SettingRow(
-                    icon: "info.circle.fill",
-                    title: "Version",
-                    subtitle: "1.0.0",
-                    isToggle: false
-                )
-                
-                SettingRow(
-                    icon: "envelope.fill",
-                    title: "Contact Support",
-                    subtitle: "Get help and support",
-                    isToggle: false
-                )
-                
-                SettingRow(
-                    icon: "star.fill",
-                    title: "Rate App",
-                    subtitle: "Rate us on the App Store",
-                    isToggle: false
-                )
-            }
+        HStack {
+            Text("Version")
+            Spacer()
+            Text("1.0.0 (Build 1)")
+                .foregroundColor(AppTheme.textSecondary)
         }
-        .padding(AppTheme.spacingLarge)
-        .appCard()
+        NavigationLink("Contact Support", destination: Text("Support Page"))
+        Button("Rate on App Store") {
+            // Link to app store
+        }
     }
 }
 
 struct SignOutSection: View {
-    @EnvironmentObject var authManager: AuthenticationManager
-    @State private var showSignOutAlert = false
+    @Binding var showSignOutAlert: Bool
     
     var body: some View {
         Button(action: { showSignOutAlert = true }) {
             HStack {
-                Image(systemName: "rectangle.portrait.and.arrow.right")
-                    .font(.system(size: 20))
-                    .foregroundColor(AppTheme.error)
-                
+                Spacer()
                 Text("Sign Out")
-                    .font(AppTheme.Typography.bodyBold)
                     .foregroundColor(AppTheme.error)
-                
+                    .bold()
                 Spacer()
             }
-            .padding(AppTheme.spacingLarge)
-            .appCard()
         }
-        .buttonStyle(PlainButtonStyle())
-        .alert("Sign Out", isPresented: $showSignOutAlert) {
-            Button("Cancel", role: .cancel) { }
-            Button("Sign Out", role: .destructive) {
-                authManager.signOut()
-            }
-        } message: {
-            Text("Are you sure you want to sign out?")
-        }
-    }
-}
-
-struct SettingRow: View {
-    let icon: String
-    let title: String
-    let subtitle: String
-    let isToggle: Bool
-    @Binding var toggleValue: Bool
-    
-    init(icon: String, title: String, subtitle: String, isToggle: Bool, toggleValue: Binding<Bool> = .constant(false)) {
-        self.icon = icon
-        self.title = title
-        self.subtitle = subtitle
-        self.isToggle = isToggle
-        self._toggleValue = toggleValue
-    }
-    
-    var body: some View {
-        HStack(spacing: AppTheme.spacing) {
-            Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundColor(AppTheme.primary)
-                .frame(width: 24)
-            
-            VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
-                Text(title)
-                    .font(AppTheme.Typography.body)
-                    .foregroundColor(AppTheme.text)
-                
-                Text(subtitle)
-                    .font(AppTheme.Typography.caption)
-                    .foregroundColor(AppTheme.textSecondary)
-            }
-            
-            Spacer()
-            
-            if isToggle {
-                Toggle("", isOn: $toggleValue)
-                    .labelsHidden()
-            } else {
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(AppTheme.textSecondary)
-            }
-        }
-        .padding(AppTheme.spacing)
-        .background(Color.white)
-        .cornerRadius(AppTheme.cornerRadiusSmall)
     }
 }
 
 #Preview {
     SettingsView()
-        .environmentObject(DataManager())
         .environmentObject(AuthenticationManager())
+        .environmentObject(DataManager())
 } 

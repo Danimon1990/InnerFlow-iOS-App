@@ -58,11 +58,24 @@ class AuthenticationManager: ObservableObject {
                 name: name,
                 email: email,
                 createdAt: Date(),
-                notificationSettings: NotificationSettings(
-                    dailyReminder: true,
-                    weeklyReport: true
-                )
+                notificationSettings: NotificationSettings(),
+                trackingSettings: TrackingSettings()
             )
+            
+            // Manually create dictionary
+            let trackingSettingsData: [String: Any] = [
+                "trackMood": profile.trackingSettings.trackMood,
+                "trackEnergy": profile.trackingSettings.trackEnergy,
+                "trackSleep": profile.trackingSettings.trackSleep,
+                "trackStress": profile.trackingSettings.trackStress,
+                "trackSymptoms": profile.trackingSettings.trackSymptoms,
+                "trackFood": profile.trackingSettings.trackFood,
+                "trackMedicines": profile.trackingSettings.trackMedicines,
+                "trackDigestion": profile.trackingSettings.trackDigestion,
+                "trackMoonCycle": profile.trackingSettings.trackMoonCycle,
+                "trackPain": profile.trackingSettings.trackPain,
+                "trackNotes": profile.trackingSettings.trackNotes
+            ]
             
             let data: [String: Any] = [
                 "name": profile.name,
@@ -71,9 +84,10 @@ class AuthenticationManager: ObservableObject {
                 "notificationSettings": [
                     "dailyReminder": profile.notificationSettings.dailyReminder,
                     "weeklyReport": profile.notificationSettings.weeklyReport
-                ]
+                ],
+                "trackingSettings": trackingSettingsData
             ]
-            
+
             try await db.collection("users").document(user.uid).setData(data)
             self.userProfile = profile
             
@@ -130,12 +144,28 @@ class AuthenticationManager: ObservableObject {
                 dailyReminder: notificationData["dailyReminder"] as? Bool ?? true,
                 weeklyReport: notificationData["weeklyReport"] as? Bool ?? true
             )
+
+            let trackingData = data["trackingSettings"] as? [String: Any] ?? [:]
+            let trackingSettings = TrackingSettings(
+                trackMood: trackingData["trackMood"] as? Bool ?? true,
+                trackEnergy: trackingData["trackEnergy"] as? Bool ?? true,
+                trackSleep: trackingData["trackSleep"] as? Bool ?? true,
+                trackStress: trackingData["trackStress"] as? Bool ?? true,
+                trackSymptoms: trackingData["trackSymptoms"] as? Bool ?? true,
+                trackFood: trackingData["trackFood"] as? Bool ?? true,
+                trackMedicines: trackingData["trackMedicines"] as? Bool ?? true,
+                trackDigestion: trackingData["trackDigestion"] as? Bool ?? true,
+                trackMoonCycle: trackingData["trackMoonCycle"] as? Bool ?? true,
+                trackPain: trackingData["trackPain"] as? Bool ?? true,
+                trackNotes: trackingData["trackNotes"] as? Bool ?? true
+            )
             
             var userProfile = UserProfile(
                 name: data["name"] as? String ?? "",
                 email: data["email"] as? String ?? "",
                 createdAt: (data["createdAt"] as? Timestamp)?.dateValue() ?? Date(),
-                notificationSettings: notificationSettings
+                notificationSettings: notificationSettings,
+                trackingSettings: trackingSettings
             )
             userProfile.id = document.documentID
             self.userProfile = userProfile
