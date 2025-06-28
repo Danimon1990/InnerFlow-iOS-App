@@ -10,9 +10,23 @@ import FirebaseFirestore
 
 struct UserProfile: Codable, Identifiable {
     var id: String?
-    let name: String
+    // Basic Info
+    var name: String // First Name
+    var lastName: String?
     let email: String
     let createdAt: Date
+    
+    // Demographics
+    var age: Int?
+    var gender: Gender?
+    var weight: Double? // in kg or lbs, user preference can be a future feature
+    var height: Double? // in cm or inches
+    
+    // Health Info
+    var medicalCondition: String?
+    var medicines: String?
+    
+    // App Settings
     var notificationSettings: NotificationSettings
     var trackingSettings: TrackingSettings
     
@@ -23,6 +37,14 @@ struct UserProfile: Codable, Identifiable {
         self.notificationSettings = notificationSettings
         self.trackingSettings = trackingSettings
     }
+}
+
+enum Gender: String, Codable, CaseIterable, Identifiable {
+    var id: String { rawValue }
+    case male = "Male"
+    case female = "Female"
+    case nonBinary = "Non-Binary"
+    case preferNotToSay = "Prefer Not to Say"
 }
 
 struct NotificationSettings: Codable {
@@ -48,3 +70,4 @@ struct TrackingSettings: Codable {
     var trackPain: Bool = true
     var trackNotes: Bool = true
 } 
+ 

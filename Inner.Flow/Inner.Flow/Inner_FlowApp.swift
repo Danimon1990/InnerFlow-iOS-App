@@ -12,11 +12,11 @@ import FirebaseAuth
 @main
 struct Inner_FlowApp: App {
     @StateObject private var authManager = AuthenticationManager()
-    
+
     init() {
         FirebaseApp.configure()
-    }
-    
+        }
+
     var body: some Scene {
         WindowGroup {
             ContentView()

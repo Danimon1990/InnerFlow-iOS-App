@@ -1,0 +1,38 @@
+{
+  "name": "innerflow-cloud-functions",
+  "version": "1.0.0",
+  "description": "Firebase Cloud Functions for InnerFlow app with LLM analysis",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc",
+    "serve": "npm run build && firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions",
+    "logs": "firebase functions:log"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "keywords": [
+    "firebase",
+    "cloud-functions",
+    "llm",
+    "wellness",
+    "analytics"
+  ],
+  "author": "InnerFlow Team",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^5.1.0",
+    "firebase-admin": "^13.4.0",
+    "firebase-functions": "^6.3.2",
+    "openai": "^5.8.1"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.0.4",
+    "typescript": "^5.8.3"
+  },
+  "private": true
+}

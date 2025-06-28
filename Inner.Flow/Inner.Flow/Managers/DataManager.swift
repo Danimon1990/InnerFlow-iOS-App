@@ -14,6 +14,7 @@ class DataManager: ObservableObject {
     
     @Published var dailyLogs: [DailyLog] = []
     @Published var userProfile: UserProfile?
+    @Published var analysisResults: [AnalysisResult] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -163,7 +164,19 @@ class DataManager: ObservableObject {
                 notificationSettings: notificationSettings,
                 trackingSettings: trackingSettings
             )
+            
+            // Manually decode optional profile fields
             profile.id = document.documentID
+            profile.lastName = data["lastName"] as? String
+            profile.age = data["age"] as? Int
+            if let genderString = data["gender"] as? String {
+                profile.gender = Gender(rawValue: genderString)
+            }
+            profile.weight = data["weight"] as? Double
+            profile.height = data["height"] as? Double
+            profile.medicalCondition = data["medicalCondition"] as? String
+            profile.medicines = data["medicines"] as? String
+            
             self.userProfile = profile
             
         } catch {
@@ -191,7 +204,7 @@ class DataManager: ObservableObject {
                 "trackNotes": profile.trackingSettings.trackNotes
             ]
             
-            let data: [String: Any] = [
+            var data: [String: Any] = [
                 "name": profile.name,
                 "email": profile.email,
                 "createdAt": Timestamp(date: profile.createdAt),
@@ -202,12 +215,59 @@ class DataManager: ObservableObject {
                 "trackingSettings": trackingSettingsData
             ]
             
+            // Manually encode optional profile fields, handling nil values
+            data["lastName"] = profile.lastName
+            data["age"] = profile.age
+            data["gender"] = profile.gender?.rawValue
+            data["weight"] = profile.weight
+            data["height"] = profile.height
+            data["medicalCondition"] = profile.medicalCondition
+            data["medicines"] = profile.medicines
+            
             try await db.collection("users").document(userId).setData(data, merge: true)
             self.userProfile = profile
         } catch {
             errorMessage = error.localizedDescription
         }
         isLoading = false
+    }
+    
+    // MARK: - Analysis Results
+    
+    func fetchAnalysisResults(for userId: String) async {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let snapshot = try await db.collection("analysisResults")
+                .whereField("userId", isEqualTo: userId)
+                .order(by: "createdAt", descending: true)
+                .limit(to: 10)
+                .getDocuments()
+            
+            self.analysisResults = snapshot.documents.compactMap { document in
+                AnalysisResult(document: document)
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+        isLoading = false
+    }
+    
+    func getLatestAnalysis(for userId: String, type: AnalysisResult.AnalysisType) async -> AnalysisResult? {
+        do {
+            let snapshot = try await db.collection("analysisResults")
+                .whereField("userId", isEqualTo: userId)
+                .whereField("analysisType", isEqualTo: type.rawValue)
+                .order(by: "createdAt", descending: true)
+                .limit(to: 1)
+                .getDocuments()
+            
+            return snapshot.documents.first.flatMap { AnalysisResult(document: $0) }
+        } catch {
+            errorMessage = error.localizedDescription
+            return nil
+        }
     }
     
     // MARK: - Analytics (Placeholder)
@@ -222,3 +282,4 @@ class DataManager: ObservableObject {
         return 0.0
     }
 } 
+ 

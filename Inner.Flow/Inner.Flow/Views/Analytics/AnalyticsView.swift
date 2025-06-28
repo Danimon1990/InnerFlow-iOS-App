@@ -40,28 +40,32 @@ struct AnalyticsView: View {
     
     var body: some View {
         NavigationView {
-            ZStack {
-                AppTheme.background.ignoresSafeArea()
-                
-                ScrollView {
-                    VStack(spacing: AppTheme.spacingLarge) {
-                        Picker("Timeframe", selection: $selectedTimeframe) {
-                            ForEach(Timeframe.allCases) { timeframe in
-                                Text(timeframe.rawValue).tag(timeframe)
-                            }
-                        }
-                        .pickerStyle(SegmentedPickerStyle())
-                        .padding(.horizontal, AppTheme.spacingLarge)
-                        .padding(.top, AppTheme.spacingLarge)
-                        
-                        if filteredLogs.isEmpty {
-                            EmptyAnalyticsView()
-                        } else {
-                            TrendChartView(logs: filteredLogs)
-                            StatisticsGridView(logs: filteredLogs)
+            List {
+                Section(header: Text("Analytics")) {
+                    Picker("Timeframe", selection: $selectedTimeframe) {
+                        ForEach(Timeframe.allCases) { timeframe in
+                            Text(timeframe.rawValue).tag(timeframe)
                         }
                     }
-                    .padding(.bottom, AppTheme.spacingExtraLarge)
+                    .pickerStyle(SegmentedPickerStyle())
+                    .padding(.horizontal, AppTheme.spacingLarge)
+                    .padding(.top, AppTheme.spacingLarge)
+                    
+                    if filteredLogs.isEmpty {
+                        EmptyAnalyticsView()
+                    } else {
+                        TrendChartView(logs: filteredLogs)
+                        StatisticsGridView(logs: filteredLogs)
+                    }
+                }
+                Section(header: Text("AI Insights")) {
+                    NavigationLink(destination: AnalysisView().environmentObject(dataManager).environmentObject(authManager)) {
+                        HStack {
+                            Image(systemName: "brain.head.profile")
+                                .foregroundColor(.purple)
+                            Text("Flow AI Wellness Insights")
+                        }
+                    }
                 }
             }
             .navigationTitle("Analytics")
