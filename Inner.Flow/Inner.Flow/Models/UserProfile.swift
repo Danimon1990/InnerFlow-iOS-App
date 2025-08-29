@@ -25,6 +25,9 @@ struct UserProfile: Codable, Identifiable {
     // Health Info
     var medicalCondition: String?
     var medicines: String?
+    var familyHistory: String?
+    var goal: String?
+    var bloodType: BloodType?
     
     // App Settings
     var notificationSettings: NotificationSettings
@@ -45,6 +48,19 @@ enum Gender: String, Codable, CaseIterable, Identifiable {
     case female = "Female"
     case nonBinary = "Non-Binary"
     case preferNotToSay = "Prefer Not to Say"
+}
+
+enum BloodType: String, Codable, CaseIterable, Identifiable {
+    var id: String { rawValue }
+    case aPositive = "A+"
+    case aNegative = "A-"
+    case bPositive = "B+"
+    case bNegative = "B-"
+    case abPositive = "AB+"
+    case abNegative = "AB-"
+    case oPositive = "O+"
+    case oNegative = "O-"
+    case unknown = "Unknown"
 }
 
 struct NotificationSettings: Codable {

@@ -135,9 +135,18 @@ class AuthenticationManager: ObservableObject {
     }
     
     private func fetchUserProfile(for userId: String) async {
+        print("AuthManager: Starting fetchUserProfile for userId: \(userId)")
         do {
+            print("AuthManager: Attempting to fetch document from Firestore...")
             let document = try await db.collection("users").document(userId).getDocument()
-            guard let data = document.data() else { return }
+            print("AuthManager: Document fetch completed")
+            
+            guard let data = document.data() else { 
+                print("AuthManager: Document data is nil")
+                return 
+            }
+            
+            print("AuthManager: Document data retrieved successfully")
             
             let notificationData = data["notificationSettings"] as? [String: Any] ?? [:]
             let notificationSettings = NotificationSettings(
@@ -168,9 +177,24 @@ class AuthenticationManager: ObservableObject {
                 trackingSettings: trackingSettings
             )
             userProfile.id = document.documentID
+            userProfile.lastName = data["lastName"] as? String
+            userProfile.age = data["age"] as? Int
+            userProfile.gender = Gender(rawValue: data["gender"] as? String ?? "")
+            userProfile.weight = data["weight"] as? Double
+            userProfile.height = data["height"] as? Double
+            userProfile.medicalCondition = data["medicalCondition"] as? String
+            userProfile.medicines = data["medicines"] as? String
+            userProfile.familyHistory = data["familyHistory"] as? String
+            userProfile.goal = data["goal"] as? String
+            if let bloodTypeString = data["bloodType"] as? String {
+                userProfile.bloodType = BloodType(rawValue: bloodTypeString)
+            }
+            print("AuthManager: User profile created successfully: \(userProfile.name)")
             self.userProfile = userProfile
         } catch {
+            print("AuthManager: Error fetching user profile: \(error.localizedDescription)")
             errorMessage = error.localizedDescription
         }
+        print("AuthManager: fetchUserProfile completed")
     }
 } 

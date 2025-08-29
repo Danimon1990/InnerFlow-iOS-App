@@ -65,6 +65,10 @@ struct SettingsView: View {
                         DataPrivacySection()
                     }
 
+                    Section(header: Text("Debug")) {
+                        DebugSection()
+                    }
+
                     Section(header: Text("About")) {
                         AboutSection()
                     }
@@ -76,6 +80,20 @@ struct SettingsView: View {
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
+            .onAppear {
+                print("SettingsView appeared")
+                print("AuthManager userProfile: \(authManager.userProfile?.name ?? "nil")")
+                print("DataManager userProfile: \(dataManager.userProfile?.name ?? "nil")")
+                print("AuthManager isLoading: \(authManager.isLoading)")
+                print("DataManager isLoading: \(dataManager.isLoading)")
+                
+                // Ensure we have the latest user profile
+                if let userId = authManager.user?.uid {
+                    Task {
+                        await dataManager.fetchUserProfile(for: userId)
+                    }
+                }
+            }
             .alert("Sign Out", isPresented: $showSignOutAlert) {
                 Button("Cancel", role: .cancel) { }
                 Button("Sign Out", role: .destructive) {
@@ -92,33 +110,88 @@ struct SettingsView: View {
 
 struct ProfileSection: View {
     @EnvironmentObject var authManager: AuthenticationManager
+    @EnvironmentObject var dataManager: DataManager
     @State private var showProfileEdit = false
     
     var body: some View {
         VStack {
-            if let profile = authManager.userProfile {
+            if dataManager.isLoading {
                 HStack {
-                    Image(systemName: "person.circle.fill")
-                        .font(.system(size: 50))
-                        .foregroundColor(AppTheme.primary)
-                    
-                    VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
-                        Text(profile.name)
-                            .font(AppTheme.Typography.bodyBold)
-                        Text(profile.email)
-                            .font(AppTheme.Typography.caption)
-                            .foregroundColor(AppTheme.textSecondary)
+                    ProgressView()
+                        .scaleEffect(0.8)
+                    Text("Loading Profile...")
+                        .font(AppTheme.Typography.body)
+                        .foregroundColor(AppTheme.textSecondary)
+                }
+                .padding()
+            } else if let profile = dataManager.userProfile {
+                VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
+                    HStack {
+                        Image(systemName: "person.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(AppTheme.primary)
+                        
+                        VStack(alignment: .leading, spacing: AppTheme.spacingSmall) {
+                            Text(profile.name)
+                                .font(AppTheme.Typography.bodyBold)
+                            Text(profile.email)
+                                .font(AppTheme.Typography.caption)
+                                .foregroundColor(AppTheme.textSecondary)
+                        }
+                        Spacer()
+                        Button("Edit") { showProfileEdit = true }
                     }
-                    Spacer()
-                    Button("Edit") { showProfileEdit = true }
+                    
+                    // Profile details
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let lastName = profile.lastName, !lastName.isEmpty {
+                            ProfileDetailRow(label: "Last Name", value: lastName)
+                        }
+                        if let age = profile.age {
+                            ProfileDetailRow(label: "Age", value: "\(age) years")
+                        }
+                        if let gender = profile.gender {
+                            ProfileDetailRow(label: "Gender", value: gender.rawValue)
+                        }
+                        if let weight = profile.weight {
+                            ProfileDetailRow(label: "Weight", value: "\(String(format: "%.1f", weight)) kg")
+                        }
+                        if let height = profile.height {
+                            ProfileDetailRow(label: "Height", value: "\(String(format: "%.1f", height)) cm")
+                        }
+                        if let medicalCondition = profile.medicalCondition, !medicalCondition.isEmpty {
+                            ProfileDetailRow(label: "Medical Conditions", value: medicalCondition)
+                        }
+                        if let medicines = profile.medicines, !medicines.isEmpty {
+                            ProfileDetailRow(label: "Medicines", value: medicines)
+                        }
+                        if let bloodType = profile.bloodType {
+                            ProfileDetailRow(label: "Blood Type", value: bloodType.rawValue)
+                        }
+                        if let familyHistory = profile.familyHistory, !familyHistory.isEmpty {
+                            ProfileDetailRow(label: "Family History", value: familyHistory)
+                        }
+                        if let goal = profile.goal, !goal.isEmpty {
+                            ProfileDetailRow(label: "Health Goal", value: goal)
+                        }
+                    }
+                    .padding(.leading, 60) // Align with the profile info above
                 }
             } else {
-                Text("Loading Profile...")
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(AppTheme.error)
+                    Text("Failed to load profile")
+                        .font(AppTheme.Typography.body)
+                        .foregroundColor(AppTheme.error)
+                }
+                .padding()
             }
         }
         .sheet(isPresented: $showProfileEdit) {
-            // Make sure ProfileEditView exists and is set up
-            // ProfileEditView().environmentObject(authManager)
+            ProfileEditView()
+                .environmentObject(authManager)
+                .environmentObject(dataManager)
         }
     }
 }
@@ -177,6 +250,47 @@ struct AboutSection: View {
     }
 }
 
+struct DebugSection: View {
+    @EnvironmentObject var dataManager: DataManager
+    @EnvironmentObject var authManager: AuthenticationManager
+    @State private var testResult: String = ""
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("User ID: \(authManager.user?.uid ?? "Not available")")
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.textSecondary)
+            
+            Text("Auth Profile: \(authManager.userProfile?.name ?? "Not loaded")")
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.textSecondary)
+            
+            Text("Data Profile: \(dataManager.userProfile?.name ?? "Not loaded")")
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.textSecondary)
+            
+            if !testResult.isEmpty {
+                Text("Test Result: \(testResult)")
+                    .font(AppTheme.Typography.caption)
+                    .foregroundColor(testResult.contains("success") ? .green : .red)
+            }
+            
+            Button("Test Firebase Connection") {
+                Task {
+                    let result = await dataManager.testFirebaseConnection()
+                    testResult = result ? "Success" : "Failed"
+                }
+            }
+            .disabled(dataManager.isLoading)
+            
+            if dataManager.isLoading {
+                ProgressView()
+                    .scaleEffect(0.8)
+            }
+        }
+    }
+}
+
 struct SignOutSection: View {
     @Binding var showSignOutAlert: Bool
     
@@ -189,6 +303,24 @@ struct SignOutSection: View {
                     .bold()
                 Spacer()
             }
+        }
+    }
+}
+
+struct ProfileDetailRow: View {
+    let label: String
+    let value: String
+    
+    var body: some View {
+        HStack {
+            Text(label)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.textSecondary)
+                .frame(width: 100, alignment: .leading)
+            Text(value)
+                .font(AppTheme.Typography.caption)
+                .foregroundColor(AppTheme.text)
+            Spacer()
         }
     }
 }

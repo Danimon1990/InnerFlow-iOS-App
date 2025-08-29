@@ -125,16 +125,23 @@ class DataManager: ObservableObject {
     // MARK: - User Profile
     
     func fetchUserProfile(for userId: String) async {
+        print("DataManager: Starting fetchUserProfile for userId: \(userId)")
         isLoading = true
         errorMessage = nil
         
         do {
+            print("DataManager: Attempting to fetch document from Firestore...")
             let document = try await db.collection("users").document(userId).getDocument()
+            print("DataManager: Document fetch completed")
+            
             guard let data = document.data() else {
+                print("DataManager: Document data is nil")
                 errorMessage = "User profile data is empty."
                 isLoading = false
                 return
             }
+            
+            print("DataManager: Document data retrieved successfully")
             
             let notificationData = data["notificationSettings"] as? [String: Any] ?? [:]
             let notificationSettings = NotificationSettings(
@@ -176,13 +183,21 @@ class DataManager: ObservableObject {
             profile.height = data["height"] as? Double
             profile.medicalCondition = data["medicalCondition"] as? String
             profile.medicines = data["medicines"] as? String
+            profile.familyHistory = data["familyHistory"] as? String
+            profile.goal = data["goal"] as? String
+            if let bloodTypeString = data["bloodType"] as? String {
+                profile.bloodType = BloodType(rawValue: bloodTypeString)
+            }
             
+            print("DataManager: User profile created successfully: \(profile.name)")
             self.userProfile = profile
             
         } catch {
+            print("DataManager: Error fetching user profile: \(error.localizedDescription)")
             errorMessage = "Could not load user profile: \(error.localizedDescription)"
         }
         isLoading = false
+        print("DataManager: fetchUserProfile completed")
     }
     
     func updateUserProfile(_ profile: UserProfile, for userId: String) async {
@@ -223,6 +238,9 @@ class DataManager: ObservableObject {
             data["height"] = profile.height
             data["medicalCondition"] = profile.medicalCondition
             data["medicines"] = profile.medicines
+            data["familyHistory"] = profile.familyHistory
+            data["goal"] = profile.goal
+            data["bloodType"] = profile.bloodType?.rawValue
             
             try await db.collection("users").document(userId).setData(data, merge: true)
             self.userProfile = profile
@@ -280,6 +298,141 @@ class DataManager: ObservableObject {
     func getAverageMoodScore(for userId: String, days: Int = 7) async -> Double {
         // TODO: Re-implement with new data structure
         return 0.0
+    }
+    
+    // MARK: - API Calls for Manual Analysis
+    
+    func testAPIConnection() async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let url = URL(string: "https://us-central1-inner-flow-8de4f.cloudfunctions.net/api/")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                errorMessage = "Invalid response from server"
+                isLoading = false
+                return false
+            }
+            
+            if httpResponse.statusCode == 200 {
+                let responseString = String(data: data, encoding: .utf8) ?? "No response data"
+                print("API Test successful: \(responseString)")
+                isLoading = false
+                return true
+            } else {
+                errorMessage = "API test failed with status \(httpResponse.statusCode)"
+                isLoading = false
+                return false
+            }
+        } catch {
+            errorMessage = "Failed to test API: \(error.localizedDescription)"
+            isLoading = false
+            return false
+        }
+    }
+    
+    func triggerWeeklyAnalysis() async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let url = URL(string: "https://us-central1-inner-flow-8de4f.cloudfunctions.net/api/weeklyAnalysis")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                errorMessage = "Invalid response from server"
+                isLoading = false
+                return false
+            }
+            
+            if httpResponse.statusCode == 200 {
+                // Success - wait a moment for the analysis to complete, then refresh
+                try await Task.sleep(nanoseconds: 3_000_000_000)
+                if let userId = userProfile?.id {
+                    await fetchAnalysisResults(for: userId)
+                }
+                isLoading = false
+                return true
+            } else {
+                let errorData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                errorMessage = errorData?["message"] as? String ?? "Analysis failed with status \(httpResponse.statusCode)"
+                isLoading = false
+                return false
+            }
+        } catch {
+            errorMessage = "Failed to trigger analysis: \(error.localizedDescription)"
+            isLoading = false
+            return false
+        }
+    }
+    
+    func triggerMonthlyAnalysis() async -> Bool {
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            let url = URL(string: "https://us-central1-inner-flow-8de4f.cloudfunctions.net/api/monthlyAnalysis")!
+            var request = URLRequest(url: url)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                errorMessage = "Invalid response from server"
+                isLoading = false
+                return false
+            }
+            
+            if httpResponse.statusCode == 200 {
+                // Success - wait a moment for the analysis to complete, then refresh
+                try await Task.sleep(nanoseconds: 3_000_000_000)
+                if let userId = userProfile?.id {
+                    await fetchAnalysisResults(for: userId)
+                }
+                isLoading = false
+                return true
+            } else {
+                let errorData = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+                errorMessage = errorData?["message"] as? String ?? "Analysis failed with status \(httpResponse.statusCode)"
+                isLoading = false
+                return false
+            }
+        } catch {
+            errorMessage = "Failed to trigger analysis: \(error.localizedDescription)"
+            isLoading = false
+            return false
+        }
+    }
+    
+    // MARK: - Firebase Connection Test
+    
+    func testFirebaseConnection() async -> Bool {
+        print("DataManager: Testing Firebase connection...")
+        isLoading = true
+        errorMessage = nil
+        
+        do {
+            // Test basic Firestore connection
+            let testDoc = try await db.collection("test").document("connection").getDocument()
+            print("DataManager: Firebase connection test successful")
+            isLoading = false
+            return true
+        } catch {
+            print("DataManager: Firebase connection test failed: \(error.localizedDescription)")
+            errorMessage = "Firebase connection failed: \(error.localizedDescription)"
+            isLoading = false
+            return false
+        }
     }
 } 
  

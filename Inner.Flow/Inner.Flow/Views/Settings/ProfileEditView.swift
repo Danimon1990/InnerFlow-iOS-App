@@ -21,6 +21,9 @@ struct ProfileEditView: View {
     @State private var height: String = ""
     @State private var medicalCondition: String = ""
     @State private var medicines: String = ""
+    @State private var familyHistory: String = ""
+    @State private var goal: String = ""
+    @State private var bloodType: BloodType = .unknown
     
     @State private var isLoading = false
     
@@ -57,6 +60,15 @@ struct ProfileEditView: View {
                     TextField("Medical Conditions", text: $medicalCondition, axis: .vertical)
                         .lineLimit(3...)
                     TextField("Medicines, Herbs, Supplements", text: $medicines, axis: .vertical)
+                        .lineLimit(3...)
+                    Picker("Blood Type", selection: $bloodType) {
+                        ForEach(BloodType.allCases) { bloodType in
+                            Text(bloodType.rawValue).tag(bloodType)
+                        }
+                    }
+                    TextField("Family History", text: $familyHistory, axis: .vertical)
+                        .lineLimit(3...)
+                    TextField("Health Goal", text: $goal, axis: .vertical)
                         .lineLimit(3...)
                 }
             }
@@ -96,6 +108,9 @@ struct ProfileEditView: View {
         height = profile.height.map { numberFormatter.string(from: NSNumber(value: $0)) ?? "" } ?? ""
         medicalCondition = profile.medicalCondition ?? ""
         medicines = profile.medicines ?? ""
+        familyHistory = profile.familyHistory ?? ""
+        goal = profile.goal ?? ""
+        bloodType = profile.bloodType ?? .unknown
     }
     
     private func saveProfile() {
@@ -113,6 +128,9 @@ struct ProfileEditView: View {
         updatedProfile.height = Double(height)
         updatedProfile.medicalCondition = medicalCondition.isEmpty ? nil : medicalCondition
         updatedProfile.medicines = medicines.isEmpty ? nil : medicines
+        updatedProfile.familyHistory = familyHistory.isEmpty ? nil : familyHistory
+        updatedProfile.goal = goal.isEmpty ? nil : goal
+        updatedProfile.bloodType = bloodType == .unknown ? nil : bloodType
         
         Task {
             await dataManager.updateUserProfile(updatedProfile, for: userId)
